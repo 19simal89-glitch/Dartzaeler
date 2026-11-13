@@ -1,0 +1,14 @@
+# Signaturschlüssel – niemals hochladen (wer ihn hat, kann "Updates" der App signieren)
+signing/
+*.keystore
+*.jks
+
+# Gebaute Dateien (werden von build.sh erzeugt)
+build/
+out/
+*.apk
+*.idsig
+
+# Test-Screenshots / lokale Daten
+.test/
+data.json
