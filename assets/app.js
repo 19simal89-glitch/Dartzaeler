@@ -445,7 +445,7 @@ function topBar(title, extra = '') {
 // Versionsnummer kommt aus dem AndroidManifest (versionName), damit sie nur dort gepflegt wird
 function appVersion() {
   try { if (window.AndroidStore && AndroidStore.version) return AndroidStore.version(); } catch (e) {}
-  return '1.2';
+  return '1.3';
 }
 function vHome() {
   let h = `<div class="screen"><div class="scroll home"><div class="hero">${LOGO}<h1>Dartzähler</h1><p>301 · 501 · 701 · Round the Clock · Cricket</p></div>`;
