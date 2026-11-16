@@ -79,6 +79,15 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String version() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
         public synchronized String load() {
             File f = file();
             if (!f.exists()) return null;

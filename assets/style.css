@@ -49,6 +49,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .resume{border:1px solid var(--gold);margin-bottom:16px}
 .resume b{color:var(--gold)}
 .foot{text-align:center;color:var(--mu);font-size:12.5px;margin-top:26px}
+.scroll.home{display:flex;flex-direction:column}
+.scroll.home .foot{margin-top:auto;padding-top:26px}
 
 /* Segmentierte Auswahl */
 .seg{display:flex;flex-wrap:wrap;gap:8px}
@@ -244,3 +246,4 @@ table.sum{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:14.5px
 .ch-lab{fill:var(--tx);font-size:12px;font-weight:700;text-anchor:middle}
 .ch-info{color:var(--mu);font-size:12.5px;margin:6px 4px 0}
 .ch-info b{color:var(--tx)}
+.qbar + small{margin-top:6px}

@@ -53,7 +53,7 @@ function persist() { Store.save(DB); }
 
 function newStats() {
   return { games: 0, wins: 0, legs: 0, legsPlayed: 0, xLegs: 0, xPts: 0, xDarts: 0, hi: 0, co: 0, n180: 0, best: {},
-    crMarks: 0, crRounds: 0, crGames: 0, crLegs: 0, rtcBest: 0, rtcGames: 0, rtcLegs: 0 };
+    crMarks: 0, crRounds: 0, crGames: 0, crLegs: 0, rtcBest: 0, rtcGames: 0, rtcLegs: 0, dA: 0, dH: 0 };
 }
 
 // ================= Hilfen =================
@@ -128,9 +128,21 @@ function finCost(d, out) {
   return 2;
 }
 const coCache = {};
+// Feste Checkout-Wege (Standard-Tabelle, Double Out) für 41–170; gelten auch für Master Out.
+// Reicht die Dart-Anzahl nicht für den Tabellenweg, wird ein Weg berechnet.
+const CO_TABLE = (() => {
+  const t = {}, M = { S: 1, D: 2, T: 3 };
+  ('170 T20 T20 D25|167 T20 T19 D25|164 T20 T18 D25|161 T20 T17 D25|160 T20 T20 D20|158 T20 T20 D19|157 T20 T19 D20|156 T20 T20 D18|155 T20 T19 D19|154 T20 T18 D20|153 T20 T19 D18|152 T20 T20 D16|151 T20 T17 D20|150 T20 T18 D18|149 T20 T19 D16|148 T20 T16 D20|147 T20 T17 D18|146 T19 T19 D16|145 T19 T20 D14|144 T20 T20 D12|143 T20 T17 D16|142 T18 T20 D14|141 T20 T19 D12|140 T20 T20 D10|139 T19 T14 D20|138 T20 T18 D12|137 T20 T15 D16|136 T20 T20 D8|135 S25 T20 D25|134 T20 T14 D16|133 T20 T11 D20|132 D25 T14 D20|131 T20 T13 D16|130 T20 T20 D5|129 T19 T16 D12|128 T18 T14 D16|127 T20 T17 D8|126 T19 T19 D6|125 D25 T17 D12|124 T20 T16 D8|123 T19 T16 D9|122 T18 T18 D7|121 T20 T11 D14|120 T20 S20 D20|119 T19 T12 D13|118 T20 S18 D20|117 T20 S17 D20|116 T20 S16 D20|115 T20 S15 D20|114 T20 S14 D20|113 T19 S16 D20|112 T20 S12 D20|111 T20 S11 D20|110 T20 S10 D20|109 T20 S9 D20|108 T20 S16 D16|107 T19 S18 D16|106 T20 S14 D16|105 T20 S13 D16|104 T18 S18 D16|103 T19 S14 D16|102 T20 S10 D16|101 T20 S9 D16|100 T20 D20|99 T19 S10 D16|98 T20 D19|97 T19 D20|96 T20 D18|95 T19 D19|94 T18 D20|93 T19 D18|92 T20 D16|91 T17 D20|90 T20 D15|89 T19 D16|88 T20 D14|87 T17 D18|86 T18 D16|85 T15 D20|84 T20 D12|83 T17 D16|82 D25 D16|81 T19 D12|80 T20 D10|79 T19 D11|78 T18 D12|77 T19 D10|76 T20 D8|75 T17 D12|74 T14 D16|73 T17 D11|72 T16 D12|71 T13 D16|70 T18 D8|69 T15 D12|68 T20 D4|67 T17 D8|66 T10 D18|65 T11 D16|64 T16 D8|63 T13 D12|62 T10 D16|61 T15 D8|60 S20 D20|59 S19 D20|58 S18 D20|57 S17 D20|56 S16 D20|55 S15 D20|54 S14 D20|53 S13 D20|52 S12 D20|51 S19 D16|50 S18 D16|49 S9 D20|48 S16 D16|47 S15 D16|46 S14 D16|45 S13 D16|44 S12 D16|43 S11 D16|42 S10 D16|41 S9 D16').split('|').forEach(r => {
+    const [s, ...d] = r.split(' ');
+    t[s] = d.map(x => ({ n: +x.slice(1), m: M[x[0]] }));
+  });
+  return t;
+})();
 function checkout(score, darts, out) {
   const key = score + '|' + darts + '|' + out;
   if (key in coCache) return coCache[key];
+  const tab = out !== 'single' && CO_TABLE[score];
+  if (tab && tab.length <= darts) return (coCache[key] = tab);
   let res = null;
   if (score > 0 && score <= 180 && darts > 0) {
     const fins = SEGS.filter(d => finOk(d, out));
@@ -171,8 +183,8 @@ function newGame(players, s) {
     opts: { in: s.in || 'single', out: s.out, input: s.input, legs: s.legs, rtcSkip: s.rtcSkip, rtcBull: s.rtcBull, crCut: s.crCut },
     players: players.map(p => ({ id: p.id, name: p.name })),
     legsWon: players.map(() => 0), leg: 1, starter: 0, cur: 0, turn: [], phase: 'play', legWinner: null,
-    stats: players.map(() => ({ pts: 0, darts: 0, hi: 0, co: 0, n180: 0, legDarts: [], marks: 0, rounds: 0, rtcDarts: [] })),
-    ps: null, committed: false
+    stats: players.map(() => ({ pts: 0, darts: 0, hi: 0, co: 0, n180: 0, legDarts: [], marks: 0, rounds: 0, rtcDarts: [], dA: 0 })),
+    ps: null
   };
   initLeg(g);
   return g;
@@ -184,12 +196,17 @@ function initLeg(g) {
     return { idx: 0, darts: 0, last: null };
   });
   g.cur = g.starter; g.turn = []; g.phase = 'play'; g.legWinner = null;
+  g.stats.forEach(st => (st.lhi = 0));
+  g.base = JSON.parse(JSON.stringify(g.stats));   // Stand zu Leg-Beginn -> Differenz = Statistik dieses Legs
 }
 function snap() { hist.push(JSON.stringify(G)); if (hist.length > 120) hist.shift(); }
 function saveGame() { DB.current = { G, hist }; persist(); }
 function undo() {
   if (!hist.length) return toast('Nichts zum Rückgängigmachen');
-  G = JSON.parse(hist.pop()); mod = 1; sumBuf = '';
+  const prev = JSON.parse(hist.pop());
+  // Wird ein gewonnenes Leg rückgängig gemacht, auch dessen Statistik-Eintrag zurücknehmen
+  if (G.statBak && (!prev.statBak || prev.statBak.leg !== G.statBak.leg)) rollbackLeg(G.statBak);
+  G = prev; mod = 1; sumBuf = '';
   saveGame(); render();
 }
 
@@ -209,12 +226,15 @@ function x01Dart(d) {
   if (p.in === false) {                      // Double/Master In: zählt erst ab dem Einstiegs-Dart
     if (!inOk(d, G.opts.in)) return 'ok';
     p.in = true;
-  }
+  } else if (finChance(p.score, out)) st.dA = (st.dA || 0) + 1;   // Dart auf ein mögliches Finish-Doppel
   const rest = p.score - d.n * d.m;
   if (rest < 0 || (rest === 1 && out !== 'single') || (rest === 0 && !finOk(d, out))) { p.score = p.ts; return 'bust'; }
   p.score = rest;
   return rest === 0 ? 'leg' : 'ok';
 }
+
+// Rest mit einem einzigen Dart checkbar (= Versuch auf das Finish-Doppel); bei Single Out nicht gezählt
+function finChance(score, out) { return out !== 'single' && !!checkout(score, 1, out); }
 
 function crDart(d) {
   const i = G.cur, p = G.ps[i], st = G.stats[i];
@@ -258,7 +278,7 @@ function endTurn(bust) {
   let total = null;
   if (isX01(G.mode)) {
     total = bust ? 0 : p.ts - p.score;
-    st.pts += total; if (total > st.hi) st.hi = total; if (total === 180) st.n180++;
+    st.pts += total; if (total > st.hi) st.hi = total; if (total > (st.lhi || 0)) st.lhi = total; if (total === 180) st.n180++;
     p.ts = p.score;
   }
   if (G.mode === 'cricket') st.rounds++;
@@ -275,7 +295,7 @@ function legWon() {
   let total = null;
   if (isX01(G.mode)) {
     total = p.ts;
-    st.pts += total; if (total > st.hi) st.hi = total; if (total === 180) st.n180++;
+    st.pts += total; if (total > st.hi) st.hi = total; if (total > (st.lhi || 0)) st.lhi = total; if (total === 180) st.n180++;
     if (total > st.co) st.co = total;
     st.legDarts.push(p.darts);
   }
@@ -284,6 +304,7 @@ function legWon() {
   p.last = { darts: G.turn.slice(), total, bust: false, fin: true };
   G.legsWon[i]++; G.legWinner = i;
   G.phase = G.legsWon[i] >= G.opts.legs ? 'matchEnd' : 'legEnd';
+  commitLeg();
 }
 
 function nextLeg() {
@@ -314,6 +335,7 @@ function enterTotal() {
   snap();
   const st = G.stats[G.cur];
   p.darts += 3; st.darts += 3;
+  if (p.in !== false && finChance(p.ts, out)) st.dA = (st.dA || 0) + 3;   // Summen-Eingabe: Näherung
   G.turn = [{ sum: v }];
   if (p.in === false && v > 0) p.in = true;
   const bust = rest < 0 || (rest === 1 && out !== 'single');
@@ -326,38 +348,60 @@ function finishSum(v, k) {
   snap();
   const p = G.ps[G.cur], st = G.stats[G.cur];
   p.darts += k; st.darts += k; p.score = 0;
+  if (G.opts.out !== 'single') st.dA = (st.dA || 0) + (finChance(v, G.opts.out) ? k : 1);
   G.turn = [{ sum: v }];
   legWon(); sumBuf = '';
   saveGame(); render();
 }
 
-function commitStats() {
-  if (G.committed) return;
-  G.committed = true;
-  const t = Date.now();
+// Statistik wird nach jedem Leg gespeichert (ein Log-Eintrag je Spieler und Leg)
+function commitLeg() {
+  const t = Date.now(), w = G.legWinner, b = G.base, bak = { leg: G.leg, data: {} };
+  if (!G.gid) G.gid = uid();
   G.players.forEach((pl, i) => {
     const P = DB.players.find(x => x.id === pl.id); if (!P) return;
-    const e = { t, mode: G.mode, win: i === G.legWinner, legs: G.legsWon[i], legsPlayed: G.leg, ...G.stats[i] };
+    bak.data[P.id] = { stats: JSON.stringify(P.stats), logLen: (P.log || []).length };
+    const st = G.stats[i], o = b ? b[i] : null, d = k => (st[k] || 0) - (o ? o[k] || 0 : 0);
+    const e = {
+      t, gid: G.gid, leg: G.leg, mode: G.mode,
+      win: i === w && G.phase === 'matchEnd',
+      // Spielstand aus der Zeit vor der Leg-Statistik (ohne Basis): bisherige Legs mitzählen
+      legs: o ? (i === w ? 1 : 0) : G.legsWon[i], legsPlayed: o ? 1 : G.leg,
+      pts: d('pts'), darts: d('darts'), dA: d('dA'), dH: i === w && isX01(G.mode) && G.opts.out !== 'single' ? 1 : 0, n180: d('n180'), marks: d('marks'), rounds: d('rounds'),
+      hi: o ? (st.lhi || 0) : st.hi, co: i === w && isX01(G.mode) ? (G.ps[i].last && G.ps[i].last.total) || 0 : 0,
+      legDarts: st.legDarts.slice(o ? o.legDarts.length : 0), rtcDarts: st.rtcDarts.slice(o ? o.rtcDarts.length : 0)
+    };
+    if (!o && G.leg > 1) e.leg = 1;   // zählt dann als neues Spiel
     addEntry(P.stats, e);
     (P.log = P.log || []).push(e);
   });
-  DB.current = null;
+  G.statBak = bak;
   persist();
 }
+function rollbackLeg(bak) {
+  Object.keys(bak.data).forEach(id => {
+    const P = DB.players.find(x => x.id === id); if (!P) return;
+    P.stats = JSON.parse(bak.data[id].stats);
+    if (P.log) P.log.length = Math.min(P.log.length, bak.data[id].logLen);
+  });
+}
+function endGame() { DB.current = null; persist(); }
 
 // Ein beendetes Spiel in eine Statistik einrechnen
 function addEntry(s, e) {
   const lp = e.legsPlayed || Math.max(1, e.legs);
-  s.games++; if (e.win) s.wins++; s.legs += e.legs; s.legsPlayed += lp;
+  const ng = !e.leg || e.leg === 1 ? 1 : 0;   // erster Leg-Eintrag eines Spiels zählt als Spiel
+  s.games += ng; if (e.win) s.wins++; s.legs += e.legs; s.legsPlayed += lp;
   if (isX01(e.mode)) {
     s.xLegs += lp;
     s.xPts += e.pts; s.xDarts += e.darts;
+    s.dA = (s.dA || 0) + (e.dA || 0); s.dH = (s.dH || 0) + (e.dH || 0);
     s.hi = Math.max(s.hi, e.hi); s.co = Math.max(s.co, e.co); s.n180 += e.n180;
     e.legDarts.forEach(d => { if (!s.best[e.mode] || d < s.best[e.mode]) s.best[e.mode] = d; });
   } else if (e.mode === 'cricket') {
-    s.crMarks += e.marks; s.crRounds += e.rounds; s.crGames++; s.crLegs += lp;
+    s.crMarks += e.marks; s.crRounds += e.rounds; s.crGames += ng; s.crLegs += lp;
   } else {
-    s.rtcGames++; s.rtcLegs += lp;
+    s.rtcGames += ng; s.rtcLegs += lp;
     e.rtcDarts.forEach(d => { if (!s.rtcBest || d < s.rtcBest) s.rtcBest = d; });
   }
 }
@@ -398,8 +442,13 @@ function topBar(title, extra = '') {
   return `<div class="top"><button class="ib" data-a="back">${ICON_BACK}</button><h2>${title}</h2>${extra}</div>`;
 }
 
+// Versionsnummer kommt aus dem AndroidManifest (versionName), damit sie nur dort gepflegt wird
+function appVersion() {
+  try { if (window.AndroidStore && AndroidStore.version) return AndroidStore.version(); } catch (e) {}
+  return '1.2';
+}
 function vHome() {
-  let h = `<div class="screen"><div class="scroll"><div class="hero">${LOGO}<h1>Dartzähler</h1><p>301 · 501 · 701 · Round the Clock · Cricket</p></div>`;
+  let h = `<div class="screen"><div class="scroll home"><div class="hero">${LOGO}<h1>Dartzähler</h1><p>301 · 501 · 701 · Round the Clock · Cricket</p></div>`;
   const c = DB.current;
   if (c && c.G) {
     const g = c.G;
@@ -409,7 +458,7 @@ function vHome() {
   h += `<div class="menu"><button class="btn gold" data-a="go" data-v="setup">Neues Spiel</button>
     <button class="btn" data-a="go" data-v="players">Spieler &amp; Statistik</button>
     <button class="btn" data-a="go" data-v="rules">Spielregeln</button></div>
-    <div class="foot">Offline-App · keine Internetverbindung · ${DB.players.length} Spieler gespeichert</div></div></div>`;
+    <div class="foot">Dartzähler V${esc(appVersion())} by Simon Florian</div></div></div>`;
   return h;
 }
 
@@ -477,6 +526,9 @@ function vPlayer() {
   const q = s.legsPlayed ? Math.round(s.legs / s.legsPlayed * 100) : null;
   const quoteTile = `<div class="st wide"><small>Leg-Quote (gewonnen ÷ gespielt)</small><b>${q === null ? '–' : q + ' %'}</b>
     <div class="qbar"><i style="width:${q || 0}%"></i></div></div>`;
+  const dq = s.dA ? Math.round(s.dH / s.dA * 100) : null;
+  const dqTile = `<div class="st wide"><small>Finish-Doppelquote (Double/Master Out)</small><b>${dq === null ? '–' : dq + ' %'}</b>
+    <div class="qbar"><i style="width:${dq || 0}%"></i></div><small>${s.dA ? `${plural(s.dH, "Finish", "Finishes")} bei ${plural(s.dA, 'Dart', 'Darts')} auf ein mögliches Finish` : 'Noch keine Darts auf ein Finish-Doppel'}</small></div>`;
   return `<div class="screen">${topBar(esc(p.name))}<div class="scroll">
     <div class="seg">${segP('week', 'Woche')}${segP('month', 'Monat')}${segP('all', 'Gesamt')}</div>
     <div class="since">${since}</div>
@@ -484,7 +536,7 @@ function vPlayer() {
     <div class="sec">301 / 501 / 701</div>${weekChart(p)}<div class="stats">${tile('3-Dart-Ø', fmt1(s.xPts, s.xDarts, 3))}${tile('Höchste Aufnahme', s.hi || '–')}
       ${tile('Höchstes Finish', s.co || '–')}${tile('180er', s.n180)}${tile('X01-Legs', s.xLegs)}
       ${tile('Bestes 301-Leg', s.best['301'] ? s.best['301'] + ' Darts' : '–')}${tile('Bestes 501-Leg', s.best['501'] ? s.best['501'] + ' Darts' : '–')}
-      ${tile('Bestes 701-Leg', s.best['701'] ? s.best['701'] + ' Darts' : '–')}</div>
+      ${tile('Bestes 701-Leg', s.best['701'] ? s.best['701'] + ' Darts' : '–')}${dqTile}</div>
     <div class="sec">Cricket &amp; Round the Clock</div><div class="stats">${tile('Cricket MPR', fmt1(s.crMarks, s.crRounds))}${tile('Cricket-Legs', s.crLegs)}
       ${tile('RTC bestes Leg', s.rtcBest ? s.rtcBest + ' Darts' : '–')}${tile('RTC-Legs', s.rtcLegs)}</div>
     <div class="sec">Verwalten</div>
@@ -732,7 +784,7 @@ function endOverlay() {
     <h2>${esc(G.players[w].name)} ${match ? (G.players.length > 1 ? 'gewinnt das Spiel!' : 'ist fertig!') : 'gewinnt Leg ' + G.leg}</h2><p>${sub}</p>
     <table class="sum">${head}${rows}</table>
     ${match ? `<button class="btn gold" data-a="rematch">Revanche</button><button class="btn pri" data-a="finish">Fertig</button>`
-            : `<button class="btn pri" data-a="nextLeg">Nächstes Leg</button>`}
+            : `<button class="btn pri" data-a="nextLeg">Nächstes Leg</button><button class="btn" data-a="finish">Spiel beenden</button>`}
     <button class="btn ghost" data-a="undo">Letzten Dart rückgängig</button></div></div>`;
 }
 
@@ -783,7 +835,7 @@ const ACT = {
   per: d => { view.per = d.v; render(); },
   wk: d => { view.wk = +d.i; render(); },
   resume: () => { G = DB.current.G; hist = DB.current.hist || []; mod = 1; sumBuf = ''; go('game'); },
-  discard: () => confirmBox('Spiel verwerfen?', 'Das laufende Spiel wird gelöscht. Es wird keine Statistik gespeichert.', 'Verwerfen', () => { DB.current = null; persist(); render(); }, true),
+  discard: () => confirmBox('Spiel verwerfen?', 'Das laufende Spiel wird gelöscht. Bereits beendete Legs bleiben in der Statistik.', 'Verwerfen', () => { DB.current = null; persist(); render(); }, true),
   set: d => { DB.settings[d.k] = d.v; persist(); render(); },
   tog: d => { DB.settings[d.k] = !DB.settings[d.k]; persist(); render(); },
   legs: d => { DB.settings.legs = Math.max(1, Math.min(11, DB.settings.legs + +d.d)); persist(); render(); },
@@ -830,19 +882,19 @@ const ACT = {
     sumBuf = ''; mod = 1; saveGame(); render();
   },
   nextLeg,
-  finish: () => { commitStats(); G = null; hist = []; home(); toast('Statistik gespeichert'); },
+  finish: () => { endGame(); G = null; hist = []; home(); },
   rematch: () => {
-    commitStats();
+    endGame();
     const pl = G.players.slice(); pl.push(pl.shift());   // gleiche Drehung wie beim Leg-Wechsel
     G = newGame(pl, { mode: G.mode, ...G.opts }); hist = []; mod = 1; sumBuf = '';
-    saveGame(); render(true); toast('Statistik gespeichert – neues Spiel!');
+    saveGame(); render(true); toast('Neues Spiel!');
   },
   leave: () => {
     if (G.phase === 'matchEnd') {
-      modal('Spiel beendet', 'Statistik speichern und zum Menü?', [{ label: 'Zurück', cls: 'ghost' }, { label: 'Speichern', cls: 'pri', fn: ACT.finish }]);
+      modal('Spiel beendet', 'Zurück zum Menü?', [{ label: 'Zurück', cls: 'ghost' }, { label: 'Zum Menü', cls: 'pri', fn: ACT.finish }]);
       return;
     }
-    modal('Spiel verlassen?', 'Du kannst das Spiel pausieren und später im Startmenü fortsetzen.', [
+    modal('Spiel verlassen?', 'Du kannst das Spiel pausieren und später im Startmenü fortsetzen. Beendete Legs sind bereits in der Statistik gespeichert.', [
       { label: 'Pausieren', cls: 'pri', fn: () => { saveGame(); G = null; home(); } },
       { label: 'Spiel abbrechen', cls: 'red', fn: () => { DB.current = null; persist(); G = null; home(); } },
       { label: 'Weiterspielen', cls: 'ghost' }], true);
