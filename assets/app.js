@@ -527,8 +527,8 @@ function vPlayer() {
   const quoteTile = `<div class="st wide"><small>Leg-Quote (gewonnen ÷ gespielt)</small><b>${q === null ? '–' : q + ' %'}</b>
     <div class="qbar"><i style="width:${q || 0}%"></i></div></div>`;
   const dq = s.dA ? Math.round(s.dH / s.dA * 100) : null;
-  const dqTile = `<div class="st wide"><small>Finish-Doppelquote (Double/Master Out)</small><b>${dq === null ? '–' : dq + ' %'}</b>
-    <div class="qbar"><i style="width:${dq || 0}%"></i></div><small>${s.dA ? `${plural(s.dH, "Finish", "Finishes")} bei ${plural(s.dA, 'Dart', 'Darts')} auf ein mögliches Finish` : 'Noch keine Darts auf ein Finish-Doppel'}</small></div>`;
+  const dqTile = `<div class="st wide"><small>Checkoutquote (Double/Master Out)</small><b>${dq === null ? '–' : dq + ' %'}</b>
+    <div class="qbar"><i style="width:${dq || 0}%"></i></div><small>${s.dA ? `${plural(s.dH, "Finish", "Finishes")} bei ${plural(s.dA, 'Dart', 'Darts')} auf ein mögliches Finish` : 'Noch keine Darts auf ein mögliches Finish'}</small></div>`;
   return `<div class="screen">${topBar(esc(p.name))}<div class="scroll">
     <div class="seg">${segP('week', 'Woche')}${segP('month', 'Monat')}${segP('all', 'Gesamt')}</div>
     <div class="since">${since}</div>
