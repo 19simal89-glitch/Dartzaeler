@@ -445,7 +445,7 @@ function topBar(title, extra = '') {
 // Versionsnummer kommt aus dem AndroidManifest (versionName), damit sie nur dort gepflegt wird
 function appVersion() {
   try { if (window.AndroidStore && AndroidStore.version) return AndroidStore.version(); } catch (e) {}
-  return '1.3';
+  return '1.4';
 }
 function vHome() {
   let h = `<div class="screen"><div class="scroll home"><div class="hero">${LOGO}<h1>Dartzähler</h1><p>301 · 501 · 701 · Round the Clock · Cricket</p></div>`;
@@ -511,7 +511,9 @@ function vPlayers() {
     h += `<button class="li" data-a="go" data-v="player" data-id="${p.id}"><span class="nm"><b>${esc(p.name)}</b>
       <small>${legLine(s)} · X01 Ø ${fmt1(s.xPts, s.xDarts, 3)}</small></span><span class="chev">›</span></button>`;
   });
-  h += `<button class="btn pri mt" data-a="addPl">+ Spieler hinzufügen</button></div></div>`;
+  h += `<button class="btn pri mt" data-a="addPl">+ Spieler hinzufügen</button>
+    <div class="row mt"><button class="btn" data-a="share">Teilen</button><button class="btn" data-a="importF">Empfangen</button></div>
+    <p class="muted hint">Spieler &amp; Statistik per Bluetooth oder Quick Share an ein anderes Handy senden. Dort unter „Empfangen“ die Datei (meist im Ordner Download) wählen – gleiche Spieler werden zusammengeführt.</p></div></div>`;
   return h;
 }
 
@@ -826,12 +828,130 @@ function flash(big, small, bad) {
   f.classList.add('on'); clearTimeout(flashT); flashT = setTimeout(() => f.classList.remove('on'), 1100);
 }
 
+// ================= Teilen & Zusammenführen =================
+// Austauschformat: Textdatei mit JSON { app, v, t, players:[{ id, name, links, since, stats, log }] }.
+// Gleiche Spieler werden über ihre IDs (inkl. früher verknüpfter IDs) erkannt, sonst über den Namen.
+// Zusammengeführt wird über die Leg-Einträge (p.log); bereits vorhandene Einträge werden nicht doppelt gezählt.
+const MODES = ['301', '501', '701', 'cricket', 'rtc'];
+const num = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : 0);
+const numArr = a => (Array.isArray(a) ? a.filter(x => typeof x === 'number' && isFinite(x) && x > 0).slice(0, 50) : []);
+function cleanEntry(e) {
+  if (!e || typeof e !== 'object' || !num(e.t) || !MODES.includes(e.mode)) return null;
+  const o = { t: e.t, mode: e.mode, win: !!e.win };
+  if (typeof e.gid === 'string') o.gid = e.gid.slice(0, 40);
+  if (e.leg !== undefined) o.leg = num(e.leg);
+  ['legs', 'legsPlayed', 'pts', 'darts', 'hi', 'co', 'n180', 'marks', 'rounds', 'dA', 'dH'].forEach(k => (o[k] = num(e[k])));
+  o.legDarts = numArr(e.legDarts); o.rtcDarts = numArr(e.rtcDarts);
+  return o;
+}
+function cleanStats(x) {
+  const s = newStats();
+  if (x && typeof x === 'object') {
+    Object.keys(s).forEach(k => { if (k !== 'best') s[k] = num(x[k]); });
+    if (x.best && typeof x.best === 'object') ['301', '501', '701'].forEach(m => { if (num(x.best[m])) s.best[m] = x.best[m]; });
+  }
+  return s;
+}
+function cleanPlayer(p) {
+  if (!p || typeof p.id !== 'string' || typeof p.name !== 'string' || !p.name.trim()) return null;
+  return {
+    id: p.id.slice(0, 40), name: p.name.trim().replace(/\s+/g, ' ').slice(0, 20),
+    links: Array.isArray(p.links) ? p.links.filter(x => typeof x === 'string').map(x => x.slice(0, 40)).slice(0, 50) : [],
+    since: num(p.since), stats: cleanStats(p.stats),
+    log: (Array.isArray(p.log) ? p.log : []).map(cleanEntry).filter(Boolean)
+  };
+}
+const eKey = e => [e.t, e.gid || '', e.leg || '', e.mode, e.legs || 0, e.pts || 0, e.darts || 0, e.marks || 0].join('|');
+const ids = p => [p.id, ...(p.links || [])];
+function findMatch(x) {
+  const xi = ids(x);
+  return DB.players.find(p => ids(p).some(i => xi.includes(i))) ||
+    DB.players.find(p => p.name.toLowerCase() === x.name.toLowerCase()) || null;
+}
+function isLinked(p, x) { const xi = ids(x); return ids(p).some(i => xi.includes(i)); }
+function newLegs(p, x) {
+  const have = new Set((p.log || []).map(eKey)), since = p.since || 0;
+  return x.log.filter(e => e.t >= since && !have.has(eKey(e)));
+}
+function mergeInto(p, x) {
+  const add = newLegs(p, x);
+  p.log = p.log || [];
+  add.forEach(e => { addEntry(p.stats, e); p.log.push(e); });
+  p.log.sort((a, b) => a.t - b.t);
+  p.links = [...new Set([...(p.links || []), ...ids(x)])].filter(i => i !== p.id);
+  return add.length;
+}
+function addImported(x) {
+  let name = x.name, k = 2;
+  while (nameTaken(name)) name = x.name.slice(0, 16) + ' (' + k++ + ')';
+  const p = { id: DB.players.some(q => q.id === x.id) ? uid() : x.id, name, stats: x.stats, log: x.log, links: x.links.filter(i => i !== x.id) };
+  if (p.id !== x.id) p.links.push(x.id);
+  if (x.since) p.since = x.since;
+  DB.players.push(p);
+  return p;
+}
+const legCount = x => x.log.reduce((a, e) => a + (e.legsPlayed || 1), 0) || x.stats.legsPlayed;
+
+function shareDialog() {
+  if (!DB.players.length) return toast('Noch keine Spieler vorhanden');
+  const list = DB.players.map(p => `<label class="chk"><input type="checkbox" data-id="${p.id}" checked><span>${esc(p.name)}</span></label>`).join('');
+  modal('Spieler teilen', `<p class="muted" style="margin:0 0 8px">Wähle die Spieler. Gesendet wird eine Datei – im nächsten Schritt z.&nbsp;B. <b>Bluetooth</b> oder <b>Quick Share</b> wählen.</p><div class="chklist">${list}</div>`,
+    [{ label: 'Abbrechen', cls: 'ghost' }, { label: 'Teilen', cls: 'pri', fn: () => {
+      const sel = [...document.querySelectorAll('#modal .chk input:checked')].map(i => i.dataset.id);
+      if (!sel.length) { toast('Keinen Spieler gewählt'); return false; }
+      const players = DB.players.filter(p => sel.includes(p.id)).map(p => ({ id: p.id, name: p.name, links: p.links || [], since: p.since || 0, stats: p.stats, log: p.log || [] }));
+      const json = JSON.stringify({ app: 'dartzaehler', v: 1, t: Date.now(), players });
+      const name = 'Dartzaehler-Spieler-' + new Date().toISOString().slice(0, 10) + '.txt';
+      if (window.AndroidStore && AndroidStore.share) { if (!AndroidStore.share(json, name)) toast('Teilen nicht möglich'); }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'text/plain' })); a.download = name; a.click(); }
+    } }], true);
+}
+function importStart() {
+  if (window.AndroidStore && AndroidStore.pick) return AndroidStore.pick();
+  const i = document.createElement('input'); i.type = 'file';
+  i.onchange = () => { const f = i.files[0]; if (f) f.text().then(onImportFile); };
+  i.click();
+}
+let imported = [];
+window.onImportFile = function (text) {
+  if (text === null) return;                         // Auswahl abgebrochen
+  let d = null;
+  try { d = JSON.parse(text); } catch (e) { /* unten */ }
+  if (!d || d.app !== 'dartzaehler' || !Array.isArray(d.players)) return toast('Keine Dartzähler-Datei');
+  imported = d.players.map(cleanPlayer).filter(Boolean);
+  if (!imported.length) return toast('Die Datei enthält keine Spieler');
+  const rows = imported.map((x, i) => {
+    const m = findMatch(x);
+    const opts = DB.players.map(p => `<option value="m:${p.id}" ${m === p ? 'selected' : ''}>Zusammenführen mit ${esc(p.name)}</option>`).join('');
+    const hint = m ? (isLinked(m, x) ? 'bereits verknüpft' : 'gleicher Name') : 'neu';
+    return `<div class="imp"><div><b>${esc(x.name)}</b> <small class="muted">${plural(legCount(x), 'Leg', 'Legs')} · ${hint}</small></div>
+      <select data-i="${i}">${opts}<option value="new" ${m ? '' : 'selected'}>Als neuen Spieler anlegen</option><option value="skip">Nicht übernehmen</option></select></div>`;
+  }).join('');
+  modal('Spieler empfangen', `<p class="muted" style="margin:0 0 8px">Beim Zusammenführen werden nur Legs übernommen, die noch nicht vorhanden sind – mehrfaches Importieren zählt nichts doppelt.</p>${rows}`,
+    [{ label: 'Abbrechen', cls: 'ghost' }, { label: 'Übernehmen', cls: 'pri', fn: importApply }], true);
+};
+function importApply() {
+  const msgs = [];
+  document.querySelectorAll('#modal .imp select').forEach(sel => {
+    const x = imported[+sel.dataset.i], v = sel.value;
+    if (v === 'skip') return;
+    if (v === 'new') { const p = addImported(x); msgs.push(`${p.name}: neu angelegt`); return; }
+    const p = DB.players.find(q => q.id === v.slice(2)); if (!p) return;
+    const n = mergeInto(p, x);
+    msgs.push(`${p.name}: ${n ? '+' + plural(n, 'Leg-Eintrag', 'Leg-Einträge') : 'nichts Neues'}`);
+  });
+  imported = [];
+  persist(); render(true);
+  if (msgs.length) setTimeout(() => modal('Übernommen', msgs.map(esc).join('<br>'), [{ label: 'OK', cls: 'pri' }]), 0);
+}
+
 // ================= Aktionen =================
 function nameTaken(n, exceptId) { return DB.players.some(p => p.id !== exceptId && p.name.toLowerCase() === n.toLowerCase()); }
 
 const ACT = {
   back, go: d => go(d.v, { id: d.id }),
   mbtn: d => pressModal(+d.i),
+  share: shareDialog, importF: importStart,
   per: d => { view.per = d.v; render(); },
   wk: d => { view.wk = +d.i; render(); },
   resume: () => { G = DB.current.G; hist = DB.current.hist || []; mod = 1; sumBuf = ''; go('game'); },
@@ -851,7 +971,7 @@ const ACT = {
   plRename: () => { const p = DB.players.find(x => x.id === view.id); namePrompt('Umbenennen', p.name, n => {
     if (nameTaken(n, p.id)) { toast('Name existiert schon'); return false; }
     p.name = n; persist(); render(); }); },
-  plReset: () => { const p = DB.players.find(x => x.id === view.id); confirmBox('Statistik zurücksetzen?', `Alle Statistiken von <b>${esc(p.name)}</b> werden auf 0 gesetzt.`, 'Zurücksetzen', () => { p.stats = newStats(); p.log = []; persist(); render(); }, true); },
+  plReset: () => { const p = DB.players.find(x => x.id === view.id); confirmBox('Statistik zurücksetzen?', `Alle Statistiken von <b>${esc(p.name)}</b> werden auf 0 gesetzt.`, 'Zurücksetzen', () => { p.stats = newStats(); p.log = []; p.since = Date.now(); persist(); render(); }, true); },
   plDelete: () => { const p = DB.players.find(x => x.id === view.id); confirmBox('Spieler löschen?', `<b>${esc(p.name)}</b> und die Statistik werden endgültig gelöscht.`, 'Löschen', () => { DB.players = DB.players.filter(x => x.id !== p.id); persist(); back(); }, true); },
   start: () => {
     const ids = selectedIds(); if (!ids.length) return;

@@ -2,8 +2,8 @@
 <!-- Absichtlich KEINE INTERNET-Berechtigung: die App ist komplett offline. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="de.florian.dartzaehler"
-    android:versionCode="4"
-    android:versionName="1.3">
+    android:versionCode="5"
+    android:versionName="1.4">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
 
@@ -24,5 +24,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Stellt nur die eigene Teilen-Datei (cache/share) für das Android-Teilen-Menü bereit -->
+        <provider
+            android:name=".ShareProvider"
+            android:authorities="de.florian.dartzaehler.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

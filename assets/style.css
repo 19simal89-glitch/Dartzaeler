@@ -247,3 +247,10 @@ table.sum{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:14.5px
 .ch-info{color:var(--mu);font-size:12.5px;margin:6px 4px 0}
 .ch-info b{color:var(--tx)}
 .qbar + small{margin-top:6px}
+.hint{font-size:13px;line-height:1.4;margin:10px 2px 0}
+.chklist{max-height:45vh;overflow-y:auto}
+.chk{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line);font-size:16px}
+.chk input{width:22px;height:22px;accent-color:var(--grn)}
+.imp{padding:10px 0;border-top:1px solid var(--line)}
+.imp select{width:100%;margin-top:6px;font-size:15px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--tx)}
+#modal .mbox{max-height:90vh;overflow-y:auto}
